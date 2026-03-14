@@ -1,12 +1,12 @@
 from crewai import Agent, LLM
-from tools.medical_tools import vitals_tool, history_tool, escalation_tool
+from tools.medical_tools import vitals_tool, history_tool, escalation_tool, medication_tool
 
 class HospitalAgents:
     def triage_nurse(self):
         return Agent(
             role='Triage Nurse',
-            goal='Monitor patient vitals and flag any signs of instability immediately.',
-            backstory='You are an expert ICU nurse specializing in pneumonia cases. You have a sharp eye for detail. you strictly follow medical protocols and prioritize patient safety above all else. You do not diagnose, you only observe and report.',
+            goal='Scan patient vitals and identify physiological signals that deviate from standard medical ranges, regardless of the diagnosis.',
+            backstory='You are a senior ICU nurse. Your role is to scan CHARTEVENTS.csv for any patient ID and identify physiological signals (vitals) that deviate from standard medical ranges, regardless of the diagnosis.',
             tools=[vitals_tool],
             verbose=True,
             allow_delegation=False,
@@ -16,12 +16,23 @@ class HospitalAgents:
     def diagnostic_specialist(self):
         return Agent(
             role='Diagnostic Specialist',
-            goal='Analyze flagged patient data to determine the root cause and severity.',
-            backstory='You are a senior specialist with 20 years of ICU experience. You look at the holistic picture, checking patient history and current vitals to rule out chronic conditions vs acute emergencies.',
+            goal='Analyze patient data and vitals to determine if anomalies indicate a critical deterioration for their specific admission diagnosis.',
+            backstory='You are a Consultant Physician. Your role is to retrieve the official ADMISSION_DIAGNOSIS from ADMISSIONS.csv for the current patient and determine if the vitals found by the nurse indicate a critical deterioration for that specific condition.',
             tools=[history_tool],
             verbose=True,
             allow_delegation=False,
             llm=LLM(model="gpt-4o")
+        )
+
+    def clinical_pharmacist(self):
+        return Agent(
+            role='Clinical Pharmacist',
+            goal='Identify the Standard of Care for the confirmed diagnosis and validate the safety of proposed medications.',
+            backstory='You are an expert in pharmacology. Your role is to identify the Standard of Care for the diagnosis confirmed by the Specialist and validate the safety of the proposed medications against the patient\'s vitals and history.',
+            tools=[medication_tool, history_tool],
+            verbose=True,
+            allow_delegation=False,
+            llm=LLM(model="gpt-4o-mini")
         )
 
     def ward_coordinator(self):

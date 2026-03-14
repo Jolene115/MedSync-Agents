@@ -20,8 +20,22 @@ class MimicLoader:
             return {}
 
     def get_patient_data(self, patient_id):
-        """Reads the processed vitals file for a specific patient."""
+        """Reads the processed vitals file for a specific patient. Dynamically extracts if missing."""
         file_path = os.path.join(self.processed_dir, f"patient_{patient_id}_vitals.csv")
+        
+        # If the file doesn't exist, try to extract it from raw data
+        if not os.path.exists(file_path):
+            print(f"[MimicLoader] Processed file not found for {patient_id}. Attempting dynamic extraction...")
+            try:
+                from data.process_mimic import extract_patient_data
+                success = extract_patient_data(patient_id)
+                if not success:
+                    print(f"[MimicLoader] Failed to extract data for {patient_id}.")
+                    return None
+            except ImportError:
+                print("[MimicLoader] Warning: Could not import process_mimic. Extraction failed.")
+                return None
+
         try:
             # Parse dates and sort by time
             df = pd.read_csv(file_path)
@@ -81,6 +95,69 @@ class MimicLoader:
             
         return vitals
 
+    def get_vitals_history(self, patient_df, current_sim_time, lookback_hours=6, admit_time=None):
+        """
+        Retrieves a time-series dataframe of vitals for visualization.
+        For sparse datasets like MIMIC, we grab the last N continuous readings 
+        rather than filtering by a strict time window that might be empty.
+        """
+        if patient_df is None or patient_df.empty:
+            return pd.DataFrame()
+            
+        past_data = patient_df[patient_df['charttime'] <= current_sim_time].copy()
+                                
+        if past_data.empty:
+            return pd.DataFrame()
+            
+        # Map Item IDs to readable labels
+        past_data['label'] = past_data['itemid'].map(self.item_dict).fillna("Unknown")
+        
+        # We only want to plot major continuous vitals
+        major_vitals = ['Heart Rate', 'Temperature F', 'O2 saturation pulseoxymetry', 'Non Invasive Blood Pressure systolic', 'Respiratory Rate']
+        
+        # Filter and clean 
+        history_df = past_data[past_data['label'].isin(major_vitals)].copy()
+        
+        # Ensure we're pulling numeric values and drop NaN
+        history_df['valuenum'] = pd.to_numeric(history_df['valuenum'], errors='coerce')
+        history_df = history_df.dropna(subset=['valuenum'])
+        
+        # Grab the last 20 valid vitals readings regardless of time gaps
+        history_df = history_df.tail(20).copy()
+        
+        # Rename for cleaner legend
+        rename_map = {
+            'Heart Rate': 'Heart Rate (bpm)',
+            'Temperature F': 'Temp (°F)',
+            'O2 saturation pulseoxymetry': 'SpO2 (%)',
+            'Non Invasive Blood Pressure systolic': 'Sys BP (mmHg)',
+            'Respiratory Rate': 'Resp Rate (insp/min)'
+        }
+        history_df['Metric'] = history_df['label'].map(rename_map)
+        
+        # Ensure admit_time is a proper datetime object for relative calculation
+        if admit_time and admit_time != 'Unknown':
+            if isinstance(admit_time, str):
+                admit_time = pd.to_datetime(admit_time)
+            # Calculate Relative Time: Hours since admission
+            history_df['Hours Since Admit'] = (history_df['charttime'] - admit_time).dt.total_seconds() / 3600.0
+            x_axis = 'Hours Since Admit'
+        else:
+            x_axis = 'charttime'
+        
+        # Pivot to wider format for easier plotting
+        pivot_df = history_df.pivot_table(
+            index=x_axis, 
+            columns='Metric', 
+            values='valuenum',
+            aggfunc='mean' # In case of duplicates at same timestamp
+        ).reset_index()
+        
+        # Keep track of what we used for the x-axis index so the app knows how to plot it
+        pivot_df.attrs['x_axis_col'] = x_axis
+        
+        return pivot_df
+
     def get_patient_history(self, patient_id):
         """
         Retrieves static patient info (Age, Gender, Diagnosis) by joining 
@@ -111,12 +188,14 @@ class MimicLoader:
             dob = patient_info.get('dob', 'Unknown')
             gender = patient_info.get('gender', 'Unknown')
             diagnosis = latest_adm.get('diagnosis', 'Unknown')
+            admit_time = latest_adm.get('admittime', 'Unknown')
             
             history_text = (
                 f"Patient ID: {patient_id}\n"
                 f"Gender: {gender}\n"
                 f"Date of Birth: {dob}\n"
                 f"Admission Diagnosis: {diagnosis}\n"
+                f"Admission Time: {admit_time}\n"
                 f"Insurance: {latest_adm.get('insurance', 'Unknown')}\n"
                 f"Religion: {latest_adm.get('religion', 'Unknown')}\n"
             )

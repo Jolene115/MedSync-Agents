@@ -13,35 +13,41 @@ current_simulation_time = simulation_start_time
 class VitalsMonitorTool(BaseTool):
     name: str = "Monitor Vitals"
     description: str = (
-        "Reads the latest vital signs for a given patient_id at the current simulation time. "
-        "Returns a dictionary with heart_rate, bp, spo2, and temp. "
-        "Each call advances the simulation time by 15 minutes."
+        "Reads the most recent vital signs records for a given patient_id. "
+        "Returns the last 10 readings regardless of the exact time, ensuring data is found."
     )
 
     def _run(self, patient_id: str) -> str:
-        global current_simulation_time
-        
-        # Check if patient ID matches our processed data, if not default to demo patient
-        if patient_id not in ["40124"]: 
-             return f"Error: Patient {patient_id} not found in processed data. Try 40124."
-
         # Load data
         df = loader.get_patient_data(patient_id)
-        if df is None:
-            return "Error: No data found"
+        if df is None or df.empty:
+            return "Error: No data found for this patient."
             
-        # Get vitals at current time
-        vitals = loader.get_vitals_at_time(df, current_simulation_time)
+        # The Fix: Filter for relevant vital IDs and grab the most recent readings, ignoring the clock!
+        vital_ids = [220045, 211, 220179, 220050, 51, 220277, 646, 223761, 678, 220210, 618]
+        filtered_df = df[df['itemid'].isin(vital_ids)]
         
-        # Advance time for next step (Simulation of time passing)
-        current_simulation_time += timedelta(minutes=15)
+        if filtered_df.empty:
+            filtered_df = df  # fallback if none of the specific IDs are found
+            
+        trend_data = filtered_df.sort_values('charttime').tail(15)
         
-        result = {
-            "patient_id": patient_id,
-            "current_time": str(current_simulation_time),
-            "vitals": vitals.get("values", "No data at this timestamp")
-        }
-        return str(result)
+        results = []
+        for _, row in trend_data.iterrows():
+            item_id = row['itemid']
+            label = loader.item_dict.get(item_id, f"Unknown({item_id})")
+            val = row['valuenum']
+            uom = row.get('valueuom', '')
+            time_str = str(row['charttime'])
+            results.append(f"[{time_str}] {label} (ID: {item_id}): {val} {uom}")
+            
+        vit_data = "\n".join(results)
+        
+        return (
+            f"Vitals scanning completed for patient {patient_id}.\n"
+            f"Here are the most recent 10 records found:\n{vit_data}\n\n"
+            f"Note to Agent: Please analyze these records for anomalies like missing expected vitals or abnormal values."
+        )
 
 class PatientHistoryTool(BaseTool):
     name: str = "Read Patient History"
@@ -57,7 +63,39 @@ class EscalationTool(BaseTool):
     def _run(self, severity: str, recommendation: str, reason: str) -> str:
         return f"ESCALATION LOGGED: Severity={severity}, Action={recommendation}, Reason={reason}"
 
+class MedicationCheckTool(BaseTool):
+    name: str = "Check Medication"
+    description: str = (
+        "Looks up standard treatment protocols based on a given diagnosis. "
+        "Returns recommended medications, standard dosages, and prominent contraindications."
+    )
+
+    def _run(self, diagnosis: str) -> str:
+        diagnosis = diagnosis.lower()
+        if "pneumonia" in diagnosis:
+            return (
+                "Standard Treatment for Pneumonia (Community Acquired/Hospital Acquired):\n"
+                "- Primary Option: Ceftriaxone 1g IV daily + Azithromycin 500mg IV daily.\n"
+                "- Alternative (if Penicillin/Cephalosporin allergy): Levofloxacin 750mg IV daily.\n"
+                "- Contraindications: Avoid Levofloxacin in patients with prolonged QTc intervals."
+            )
+        elif "sepsis" in diagnosis:
+            return (
+                "Standard Treatment for Sepsis (Unknown Origin):\n"
+                "- Primary Option: Vancomycin (dose based on pharmacy consult) + Cefepime 2g IV every 8h.\n"
+                "- Contraindications: Adjust Cefepime dose for renal impairment."
+            )
+        elif "stemi" in diagnosis or "myocardial infarction" in diagnosis or "heart attack" in diagnosis:
+            return (
+                "Standard Treatment for STEMI (ST-Elevation Myocardial Infarction):\n"
+                "- Primary Option: Aspirin 325mg chewed, Clopidogrel 300-600mg, Heparin infusion, Nitroglycerin."
+                "- Contraindications: Avoid Nitroglycerin if patient is hypotensive (low Blood Pressure) or severely bradycardic."
+            )
+        else:
+            return f"No standard protocol found in database for '{diagnosis}'. Recommend general supportive care and consult infectious disease if infection suspected."
+
 # Export instances for agents to use
 vitals_tool = VitalsMonitorTool()
 history_tool = PatientHistoryTool()
 escalation_tool = EscalationTool()
+medication_tool = MedicationCheckTool()
