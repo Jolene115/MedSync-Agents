@@ -16,13 +16,6 @@ venv/
 data/raw/
 data/*.zip
 
-# Ignore specific CSV files in the data root
-data/ADMISSIONS.csv
-data/D_ITEMS.csv
-data/PATIENTS.csv
-
-# Ignore all other CSVs in data to be safe
-data/*.csv
-
-# Processed data
-data/processed/
+# Ignore large raw source files (e.g. CHARTEVENTS.csv)
+# BUT allow ADMISSIONS.csv and PATIENTS.csv (small, needed by agents)
+# and allow processed/ directory (needed for vitals trends)
