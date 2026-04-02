@@ -1,117 +1,132 @@
-# 🏥 MedSync-Agents — Clinical AI Coordination Dashboard
+# 🏥 MedSync-Agents
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://medsync-agents.streamlit.app)
+### Multi-Agent Clinical Coordination with Human-in-the-Loop Safety
 
-> A multi-agent clinical coordination platform powered by **CrewAI** and **OpenAI**, built on de-identified **MIMIC-III** patient data. Features a **Human-in-the-Loop (HITL)** override system for safe, transparent AI-assisted medical decision-making.
+[![Live Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://medsync-agents.streamlit.app)
+&nbsp;&nbsp;![Python](https://img.shields.io/badge/Python-3.11-blue)
+&nbsp;&nbsp;![CrewAI](https://img.shields.io/badge/CrewAI-Multi--Agent-orange)
+&nbsp;&nbsp;![MIMIC-III](https://img.shields.io/badge/Data-MIMIC--III-green)
 
----
-
-## 🚀 Live Demo
-
-👉 **[medsync-agents.streamlit.app](https://medsync-agents.streamlit.app)**
-
----
-
-## 🧠 What It Does
-
-MedSync-Agents simulates a hospital coordination workflow using four specialized AI agents that collaborate sequentially:
-
-| Stage | Agent | Role |
-|-------|-------|------|
-| 1 | 🩺 **Triage Nurse** | Monitors patient vitals from CHARTEVENTS and flags anomalies |
-| 2 | 🧠 **Diagnostic Specialist** | Reads admission diagnosis and performs differential diagnosis |
-| 3 | 💊 **Clinical Pharmacist** | Recommends medication with safety checks against vitals |
-| 4 | 📋 **Ward Coordinator** | Finalizes resource allocation (ICU vs. General Ward) with severity scoring |
-
-### Human-in-the-Loop Override
-
-Between Stage 3 and Stage 4, the system **pauses** for human review. A clinician can:
-- Review the AI's proposed medication plan
-- Edit dosages, remove contraindicated drugs, or adjust severity
-- The Ward Coordinator then incorporates these overrides into the final report
-
-This implements a **Segmented Crew Handoff** architecture — a safer alternative to real-time AI decision-making in clinical settings.
+> 👉 **[Try the Live Demo →](https://medsync-agents.streamlit.app)**
 
 ---
 
-## 📊 Dashboard Features
+## 🔍 The Problem
 
-- **Patient Context Panel** — Auto-loads demographics and admission diagnosis
-- **Vitals Trend Charts** — Disease-adaptive Plotly visualizations (e.g., Resp Rate for Pneumonia, BP for STEMI)
-- **Live Coordination Feed** — Real-time agent activity with stage labels and clinical reasoning expanders
-- **Criticality Gauge** — Severity Score visualization (0–10) with color-coded risk zones
-- **Downloadable Report** — Export the final clinical coordination report as a text file
+Clinical AI systems face a fundamental trust barrier: **the Black Box problem**. When an AI recommends a medication or escalation decision, clinicians cannot see *why* — making it unsafe for real-world adoption.
+
+MedSync-Agents solves this by combining **multi-agent specialization** (each agent has a clearly defined clinical role) with a **Human-in-the-Loop safety checkpoint** that pauses AI execution for human review before any final decision is made.
+
+Built on **99 de-identified patients** from the [MIMIC-III Clinical Database](https://physionet.org/content/mimiciii/1.4/) (Beth Israel Deaconess Medical Center).
+
+---
+
+## 🧠 How It Works — Segmented Crew Architecture
+
+The system uses a **two-phase execution model** that physically separates AI analysis from final decision-making:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PHASE 1: AI Analysis                         │
+│                                                                 │
+│   🩺 Triage Nurse ──→ 🧠 Diagnostic Specialist ──→ 💊 Pharmacist │
+│   (Reads Vitals)      (Differential Diagnosis)   (Drug Safety)  │
+│                                                                 │
+├─────────────────────── 🚨 SYSTEM PAUSES ────────────────────────┤
+│                                                                 │
+│              HUMAN-IN-THE-LOOP CHECKPOINT                       │
+│    ┌──────────────────────────────────────────┐                 │
+│    │  Clinician reviews AI medication plan    │                 │
+│    │  ✏️  Edit dosages                         │                 │
+│    │  ❌  Remove contraindicated drugs         │                 │
+│    │  ⚠️  Override severity assessment         │                 │
+│    └──────────────────────────────────────────┘                 │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                    PHASE 2: Executive Decision                  │
+│                                                                 │
+│                    📋 Ward Coordinator                           │
+│         (Incorporates human overrides into final report)        │
+│         (ICU vs. General Ward allocation + Severity Score)      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Why Two Phases?
+
+This is the **Segmented Crew Handoff** — a deliberate architectural choice:
+
+- **Phase 1** runs as a single CrewAI sequential crew (3 agents)
+- The system **physically stops execution** — not a prompt pause, but an actual code-level break
+- The human edits are injected as the **"Gold Standard"** into Phase 2
+- **Phase 2** runs a separate CrewAI crew where the Ward Coordinator is contractually bound to respect human overrides
+
+This means the AI **cannot bypass human judgment** — it is architecturally impossible, not just prompt-enforced.
+
+---
+
+## 📊 Dashboard
+
+| Feature | Description |
+|---------|-------------|
+| **Patient Context** | Auto-loads demographics, diagnosis, and admission timeline |
+| **Vitals Trends** | Disease-adaptive charts (Resp Rate for Pneumonia, BP for STEMI, Temp for Sepsis) |
+| **Live Coordination Feed** | Real-time agent reasoning with expandable "Clinical Thinking" panels |
+| **Criticality Gauge** | Severity Score (0–10) with color-coded risk zones |
+| **Clinical Override** | Editable text area for human medication/severity adjustments |
+| **Downloadable Report** | Export the final coordination report as documentation |
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-app.py                    # Streamlit dashboard with HITL State Machine
+app.py                       # Streamlit dashboard + HITL State Machine
 ├── core/
-│   ├── crew.py           # Bifurcated CrewAI engine (Phase 1 + Phase 2)
-│   └── agents.py         # Agent role definitions
+│   └── crew.py              # Bifurcated CrewAI engine
+│                            #   └── run_initial_phase()  → Agents 1-3
+│                            #   └── run_final_phase()    → Agent 4 + human input
 ├── agents/
-│   └── hospital_agents.py # Agent configurations
+│   └── hospital_agents.py   # Agent role definitions
 ├── tools/
-│   └── medical_tools.py  # CSV-based medical tools (vitals, history, meds)
+│   └── medical_tools.py     # MIMIC-III data tools (vitals, history, meds)
 ├── data/
-│   ├── mimic_loader.py   # Dynamic MIMIC-III data loader
-│   ├── process_mimic.py  # Raw data processing script
-│   ├── ADMISSIONS.csv    # De-identified admission records
-│   ├── PATIENTS.csv      # De-identified patient demographics
-│   └── processed/        # Pre-processed patient vitals CSVs
-└── main.py               # CLI fallback with terminal HITL
+│   ├── mimic_loader.py      # Dynamic patient data loader
+│   ├── ADMISSIONS.csv       # 99 de-identified admission records
+│   ├── PATIENTS.csv         # Patient demographics
+│   └── processed/           # Per-patient vitals (99 files)
+└── pages/
+    └── 1_IoE_Theory.py      # IoE architecture reference
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **AI Framework:** [CrewAI](https://crewai.com) + [LangChain](https://langchain.com)
-- **LLM:** OpenAI GPT-4o-mini
-- **Frontend:** [Streamlit](https://streamlit.io) with Plotly
-- **Data:** [MIMIC-III](https://physionet.org/content/mimiciii/1.4/) (de-identified clinical dataset)
+| Layer | Technology |
+|-------|------------|
+| **AI Orchestration** | [CrewAI](https://crewai.com) + [LangChain](https://langchain.com) |
+| **LLM** | OpenAI GPT-4o-mini |
+| **Frontend** | [Streamlit](https://streamlit.io) + Plotly |
+| **Clinical Data** | [MIMIC-III](https://physionet.org/content/mimiciii/1.4/) (PhysioNet) |
+| **Deployment** | Streamlit Community Cloud |
 
 ---
 
-## ⚙️ Local Setup
+## 🧪 Patient Directory — 99 Testable Cases
 
-```bash
-# 1. Clone the repo
-git clone https://github.com/Jolene115/MedSync-Agents.git
-cd MedSync-Agents
+Enter any Patient ID into the dashboard. Recommended demo cases:
 
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Add your OpenAI API key
-echo 'OPENAI_API_KEY=sk-your-key-here' > .env
-
-# 4. Run the dashboard
-streamlit run app.py
-```
-
----
-
-## 🧪 Patient Directory — Try These IDs!
-
-All **99 patients** are testable. Enter any ID below into the dashboard. Here are some highlights by category:
-
-### ⭐ Recommended Demo Cases
-
-| Patient ID | Diagnosis | Why It's Interesting |
+| Patient ID | Diagnosis | What to Look For |
 |---|---|---|
-| **40124** | Shortness of Breath | Default patient — Resp Rate + SpO2 trends |
-| **40503** | STEMI (Heart Attack) | Cardiac case — Heart Rate + BP trends |
-| **10006** | Sepsis | Infection case — Temp + HR trends |
-| **41976** | Pneumonia | Classic respiratory case |
-| **43881** | Acute Pulmonary Embolism | Emergency presentation |
-
-### Full Patient List
+| **40124** | Shortness of Breath | Resp Rate + SpO2 trends |
+| **40503** | STEMI (Heart Attack) | Heart Rate + BP, drug contraindications |
+| **10006** | Sepsis | Temperature + HR, broad-spectrum antibiotics |
+| **41976** | Pneumonia | Classic respiratory protocol |
+| **43881** | Acute Pulmonary Embolism | Emergency escalation |
 
 <details>
-<summary>Click to expand all 99 Patient IDs</summary>
+<summary>View all 99 Patient IDs</summary>
 
 | ID | Diagnosis | ID | Diagnosis |
 |---|---|---|---|
@@ -167,6 +182,25 @@ All **99 patients** are testable. Enter any ID below into the dashboard. Here ar
 | 10132 | Non-Small Cell Lung Cancer | 44228 | Cholangitis |
 
 </details>
+
+---
+
+## ⚙️ Local Setup
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/Jolene115/MedSync-Agents.git
+cd MedSync-Agents
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Add your OpenAI API key
+echo 'OPENAI_API_KEY=sk-your-key-here' > .env
+
+# 4. Run the dashboard
+streamlit run app.py
+```
 
 ---
 

@@ -13,12 +13,12 @@ class HospitalSystem:
         pharmacist = self.agents.clinical_pharmacist()
 
         # 2. Define Tasks
-        format_rules = "Format Rules: Use clear Markdown headers (###) for each section. Use bullet points for vital readings. NEVER use escaped characters like \\n in your final answer; provide raw, readable text that a human doctor can immediately act upon."
+        format_rules = "Format Rules: Use clear Markdown headers (###) for each section. Use bullet points for vital readings. NEVER use escaped characters like \\n in your final answer; provide raw, readable text that a human doctor can immediately act upon.\n\nCRITICAL: You MUST end your response with exactly these two sections:\n### KEY FINDING:\n(One sentence summarizing the single most important clinical finding)\n### RECOMMENDATION:\n(One actionable sentence for the next clinician in the chain)"
 
         # Task 1: Monitoring
         monitor_task = Task(
             description=f'As the Triage Nurse, begin by identifying yourself and stating your task: monitoring vitals for Subject {patient_id}. Analyze these vitals and flag any anomalies for the team. Do not assume a diagnosis.\n\n{format_rules}',
-            expected_output='A report on the current vitals, identified trends, and any flagged anomalies based on a single tool reading.',
+            expected_output='A report on the current vitals, identified trends, and any flagged anomalies based on a single tool reading. MUST end with ### KEY FINDING: and ### RECOMMENDATION: sections.',
             agent=nurse,
             tools=[vitals_tool]
         )
@@ -26,7 +26,7 @@ class HospitalSystem:
         # Task 2: Diagnosis
         diagnosis_task = Task(
             description=f'As the Diagnostic Specialist, you must acknowledge the work done by the Triage Nurse. Read the diagnosis from ADMISSIONS.csv. Compare it to the Nurse\'s flags. Provide a Differential Diagnosis for this {diagnosis} case. Your output must be clear for the Pharmacist.\n\n{format_rules}',
-            expected_output='A definitive diagnostic assessment, a differential diagnosis ruling out other conditions, and a severity level (Low, Medium, High).',
+            expected_output='A definitive diagnostic assessment, a differential diagnosis ruling out other conditions, and a severity level (Low, Medium, High). MUST end with ### KEY FINDING: and ### RECOMMENDATION: sections.',
             agent=specialist,
             context=[monitor_task],
             tools=[history_tool]
@@ -35,7 +35,7 @@ class HospitalSystem:
         # Task 3: Pharmacy Review
         pharmacy_task = Task(
             description=f'As the Clinical Pharmacist, you must acknowledge the work done by the Diagnostic Specialist. The Pharmacist\'s output is a MANDATORY prerequisite for the Ward Coordinator. Review the Specialist\'s diagnosis. Recommend a medication plan based on {diagnosis}. Crucial: Perform a safety check against the patient\'s current vitals and history.\n\n{format_rules}',
-            expected_output='A treatment plan outlining the prescribed medication, validated side effects context, dosage, and rationale considering the patient history.',
+            expected_output='A treatment plan outlining the prescribed medication, validated side effects context, dosage, and rationale considering the patient history. MUST end with ### KEY FINDING: and ### RECOMMENDATION: sections.',
             agent=pharmacist,
             context=[diagnosis_task],
             tools=[medication_tool, history_tool]
