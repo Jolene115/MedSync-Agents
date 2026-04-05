@@ -6,7 +6,9 @@ from datetime import datetime
 from dotenv import load_dotenv
 import plotly.express as px
 import plotly.graph_objects as go
+import json
 from data.mimic_loader import MimicLoader
+from tools.medical_tools import escalation_log
 
 # Load environment variables (API Key)
 load_dotenv()
@@ -919,12 +921,12 @@ if st.session_state.page_mode == "PREVIEW":
     st.markdown("""
     <div class="reg-footer">
         <div>
-            <span class="reg-badge">🔥 FHIR R4 Aware</span>
-            <span class="reg-badge">🔒 HIPAA Aware</span>
-            <span class="reg-badge">🤖 ISO 42001 Aware</span>
+            <span class="reg-badge">🔥 FHIR R4 Informed Design</span>
+            <span class="reg-badge">🔒 HIPAA-Conscious Architecture</span>
+            <span class="reg-badge">🤖 ISO 42001 Aligned</span>
         </div>
         <div class="reg-disclaimer">
-            Designed with awareness of healthcare data interoperability (FHIR), privacy (HIPAA), and AI governance (ISO 42001) standards. 
+            Designed considering healthcare data interoperability (FHIR), privacy (HIPAA), and AI governance (ISO 42001) principles. 
             This is a research prototype — not a certified medical device.
         </div>
     </div>
@@ -1492,6 +1494,26 @@ else:
             st.markdown("---")
             st.markdown('<div class="section-header">📊 Final Clinical Orders</div>', unsafe_allow_html=True)
 
+            # Render Escalation Decision Banner
+            if escalation_log:
+                latest_esc = escalation_log[-1]
+                esc_sev = latest_esc.get('severity', '').upper()
+                esc_rec = latest_esc.get('recommendation', '')
+                esc_rsn = latest_esc.get('reason', '')
+                
+                banner_color = "red" if ("ICU" in esc_rec.upper() or "HIGH" in esc_sev) else "green"
+                banner_icon = "🔴" if banner_color == "red" else "🟢"
+                
+                st.markdown(f"""
+                <div style="padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500;
+                            background-color: {'#fee2e2' if banner_color == 'red' else '#dcfce7'};
+                            border-left: 5px solid {'#dc2626' if banner_color == 'red' else '#16a34a'};
+                            color: {'#991b1b' if banner_color == 'red' else '#166534'};">
+                    {banner_icon} <strong>ESCALATION DECISION: {esc_rec}</strong><br/>
+                    <span style="font-size: 14px; opacity: 0.9;">Priority: {esc_sev} | Reason: {esc_rsn}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
             # Extract severity
             severity_match = re.search(r'(?:Severity Score|Severity)[\*:\s]*(\d+)', final_result_str, re.IGNORECASE)
             severity_score = int(severity_match.group(1)) if severity_match else 5
@@ -1538,9 +1560,39 @@ else:
                 else:
                     st.success(clean_final)
 
+            # Create JSON Audit Trail
+            audit_data = {
+                "patient_id": patient_id,
+                "timestamp": datetime.now().isoformat(),
+                "diagnosis": clean_dx,
+                "clinician_reviewed_plan": st.session_state.pharmacist_plan,
+                "final_ward_coordinator_output": final_result_str,
+                "severity_score": severity_score
+            }
+            
+            # Save to local logs/ directory
+            os.makedirs("logs", exist_ok=True)
+            log_filename = f"logs/audit_patient_{patient_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            with open(log_filename, "w") as f:
+                json.dump(audit_data, f, indent=4)
+
+            # Enhanced Download String
+            download_text = (
+                f"MEDICAL COORDINATION REPORT - Patient {patient_id}\n"
+                f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"Diagnosis: {clean_dx}\n"
+                f"Severity Score: {severity_score}/10\n"
+                f"{'='*60}\n"
+                f"[HUMAN CLINICIAN OVERRIDE LOG]\n"
+                f"{st.session_state.pharmacist_plan}\n"
+                f"{'='*60}\n"
+                f"[FINAL WARD COORDINATION ORDERS]\n"
+                f"{final_result_str}\n"
+            )
+
             st.download_button(
-                label="📥 Download Clinical Report",
-                data=final_result_str,
+                label="📥 Download Clinical Report & Audit Trail",
+                data=download_text,
                 file_name=f"patient_{patient_id}_clinical_report.txt",
                 mime="text/plain",
                 type="primary",
@@ -1574,12 +1626,12 @@ else:
     st.markdown("""
     <div class="reg-footer">
         <div>
-            <span class="reg-badge">🔥 FHIR R4 Aware</span>
-            <span class="reg-badge">🔒 HIPAA Aware</span>
-            <span class="reg-badge">🤖 ISO 42001 Aware</span>
+            <span class="reg-badge">🔥 FHIR R4 Informed Design</span>
+            <span class="reg-badge">🔒 HIPAA-Conscious Architecture</span>
+            <span class="reg-badge">🤖 ISO 42001 Aligned</span>
         </div>
         <div class="reg-disclaimer">
-            Designed with awareness of healthcare data interoperability (FHIR), privacy (HIPAA), and AI governance (ISO 42001) standards. 
+            Designed considering healthcare data interoperability (FHIR), privacy (HIPAA), and AI governance (ISO 42001) principles. 
             This is a research prototype — not a certified medical device.
         </div>
     </div>

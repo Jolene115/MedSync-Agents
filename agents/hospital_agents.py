@@ -42,5 +42,6 @@ class HospitalAgents:
             backstory='You are the operational backbone of the ward. You ensure that patients get the right resources (doctors, beds, medication) based on the severity of their condition. You are efficient and decisive.',
             tools=[escalation_tool],
             verbose=True,
-            allow_delegation=False
+            allow_delegation=False,
+            llm=LLM(model="gpt-4o", temperature=0.1)
         )
