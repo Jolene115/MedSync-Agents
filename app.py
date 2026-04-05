@@ -16,6 +16,35 @@ load_dotenv()
 # Initialize MimicLoader
 loader = MimicLoader()
 
+@st.cache_data
+def get_all_patients_summary():
+    import glob
+    files = glob.glob('data/processed/patient_*_vitals.csv')
+    if not files:
+        return {"00000": "No processed patients found locally"}
+    pids = [f.split('_')[1] for f in files]
+    
+    try:
+        adm_df = pd.read_csv('data/ADMISSIONS.csv')
+    except Exception:
+        adm_df = pd.DataFrame()
+        
+    summary = {}
+    for pid in pids:
+        if not adm_df.empty and 'subject_id' in adm_df.columns:
+            records = adm_df[adm_df['subject_id'] == int(pid)]
+            if not records.empty:
+                dx = records.iloc[-1].get('diagnosis', 'Unknown')
+            else:
+                dx = "Unknown Case"
+        else:
+            dx = "Unknown Case"
+        
+        dx = str(dx).title()
+        summary[pid] = f"Case {pid} — {dx}"
+        
+    return dict(sorted(summary.items(), key=lambda item: int(item[0])))
+
 # Page configuration
 st.set_page_config(
     page_title="MedSync Clinical Command Centre",
@@ -495,7 +524,10 @@ st.markdown("""
         box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         transition: all 0.3s ease;
         cursor: default;
-        height: 100%;
+        height: 380px;
+        margin-bottom: 24px;
+        display: flex;
+        flex-direction: column;
     }
     .case-card:hover {
         border-color: #3b82f6;
@@ -541,6 +573,7 @@ st.markdown("""
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        margin-top: auto;
     }
     .case-vital-chip {
         background: #f3f4f6;
@@ -915,6 +948,37 @@ if st.session_state.page_mode == "PREVIEW":
                 st.session_state.final_result = ""
                 st.session_state.completed_agents = []
                 st.rerun()
+
+    # ── Database Search (All 99 Patients) ──
+    st.markdown("---")
+    st.markdown("""
+    <div style="margin-bottom: 16px;">
+        <div style="font-size:20px; font-weight:700; color:#1f2937;">🗄️ Full MIMIC-III Patient Database (99 Cases)</div>
+        <div style="font-size:14px; color:#6b7280;">Search and launch any processed case by Patient ID or Diagnosis.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    all_patients = get_all_patients_summary()
+    
+    db_cols = st.columns([3, 1])
+    with db_cols[0]:
+        selected_db_patient = st.selectbox(
+            "Search by Patient ID or Diagnosis:",
+            options=list(all_patients.keys()),
+            format_func=lambda x: all_patients[x],
+            label_visibility="collapsed"
+        )
+    with db_cols[1]:
+        if st.button("🚀 Launch Selected Patient", use_container_width=True, type="primary"):
+            st.session_state.page_mode = "DASHBOARD"
+            st.session_state.selected_patient = selected_db_patient
+            st.session_state.sim_state = "START"
+            st.session_state.clinical_logs = []
+            st.session_state.decision_cards = []
+            st.session_state.pharmacist_plan = ""
+            st.session_state.final_result = ""
+            st.session_state.completed_agents = []
+            st.rerun()
 
     # ── Landing Footer ──
     st.markdown("---")
