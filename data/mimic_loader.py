@@ -158,6 +158,35 @@ class MimicLoader:
         
         return pivot_df
 
+    def get_key_lab_indicators(self, patient_df):
+        """Extract clinically significant lab markers for triage severity scoring.
+        Inspired by Ada Health's 'Confidence Score' approach — surface key biomarkers
+        that immediately indicate severity without requiring AI analysis."""
+        if patient_df is None or patient_df.empty:
+            return {}
+
+        indicators = {}
+
+        # Troponin-T (itemid 227429): STEMI marker, elevated if > 0.04 ng/mL
+        troponin = patient_df[patient_df['itemid'] == 227429]['valuenum'].dropna()
+        if not troponin.empty:
+            indicators['troponin_elevated'] = bool(troponin.max() > 0.04)
+            indicators['troponin_value'] = round(float(troponin.max()), 2)
+
+        # Lactic Acid (itemid 225668): Shock/perfusion marker, elevated if > 2.0 mmol/L
+        lactate = patient_df[patient_df['itemid'] == 225668]['valuenum'].dropna()
+        if not lactate.empty:
+            indicators['lactate_elevated'] = bool(lactate.max() > 2.0)
+            indicators['lactate_value'] = round(float(lactate.max()), 1)
+
+        # CK-MB (itemid 227445): Cardiac enzyme, elevated if > 25 ng/mL
+        ckmb = patient_df[patient_df['itemid'] == 227445]['valuenum'].dropna()
+        if not ckmb.empty:
+            indicators['ckmb_elevated'] = bool(ckmb.max() > 25)
+            indicators['ckmb_value'] = round(float(ckmb.max()), 1)
+
+        return indicators
+
     def get_patient_history(self, patient_id):
         """
         Retrieves static patient info (Age, Gender, Diagnosis) by joining 
