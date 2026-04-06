@@ -587,6 +587,60 @@ st.markdown("""
         background: #fef2f2;
         color: #991b1b;
     }
+    /* Responsive Media Queries */
+    @media (max-width: 768px) {
+        .status-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 20px;
+        }
+        .status-header .patient-name {
+            font-size: 18px;
+        }
+        .status-header .phase-badge {
+            align-self: flex-start;
+        }
+        .landing-hero h1 {
+            font-size: 2.0rem;
+        }
+        .reg-footer {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .pipeline-diagram {
+            padding: 20px 16px;
+        }
+        .pipeline-diagram-flow {
+            flex-direction: column;
+            gap: 12px;
+        }
+        .pipeline-connector {
+            transform: rotate(90deg);
+            margin: 4px 0;
+        }
+        .pipeline-container {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .pipeline-step {
+            justify-content: center;
+        }
+        .pipeline-arrow {
+            transform: rotate(90deg);
+            justify-content: center;
+            margin: 4px 0;
+        }
+        .decision-card .card-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .decision-card .card-status {
+            margin-left: 0;
+            margin-top: 8px;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
