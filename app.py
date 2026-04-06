@@ -524,7 +524,8 @@ st.markdown("""
         box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         transition: all 0.3s ease;
         cursor: default;
-        height: 380px;
+        min-height: 380px;
+        height: auto;
         margin-bottom: 24px;
         display: flex;
         flex-direction: column;
